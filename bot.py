@@ -170,9 +170,9 @@ def get_texts(lang: str) -> Dict[str, str]:
                 "💬 *Technical support*\n\n"
                 "If you have questions about using the bot or suggestions for improvement, "
                 "you can contact the administrators in Telegram:\n\n"
-                "• [@fedyan999](https://t.me/fedyan999)\n"
-                "• [@oltakmi](https://t.me/oltakmi)\n"
-                "• [@zx4et1x](https://t.me/zx4et1x)"
+                "• https://t.me/fedyan999\n"
+                "• https://t.me/oltakmi\n"
+                "• https://t.me/zx4et1x"
             ),
         }
 
@@ -249,9 +249,9 @@ def get_texts(lang: str) -> Dict[str, str]:
                 "💬 *Soporte técnico*\n\n"
                 "Si tienes preguntas sobre el uso del bot o sugerencias, puedes ponerte en contacto "
                 "con los administradores en Telegram:\n\n"
-                "• [@fedyan999](https://t.me/fedyan999)\n"
-                "• [@oltakmi](https://t.me/oltakmi)\n"
-                "• [@zx4et1x](https://t.me/zx4et1x)"
+                "• https://t.me/fedyan999\n"
+                "• https://t.me/oltakmi\n"
+                "• https://t.me/zx4et1x"
             ),
         }
 
@@ -325,9 +325,9 @@ def get_texts(lang: str) -> Dict[str, str]:
                 "💬 *技术支持*\n\n"
                 "如果您在使用机器人时遇到问题，或有改进建议，\n"
                 "可以通过 Telegram 联系管理员：\n\n"
-                "• [@fedyan999](https://t.me/fedyan999)\n"
-                "• [@oltakmi](https://t.me/oltakmi)\n"
-                "• [@zx4et1x](https://t.me/zx4et1x)"
+                "• https://t.me/fedyan999\n"
+                "• https://t.me/oltakmi\n"
+                "• https://t.me/zx4et1x"
             ),
         }
 
@@ -404,9 +404,9 @@ def get_texts(lang: str) -> Dict[str, str]:
             "💬 *Техническая поддержка бота*\n\n"
             "Если у вас есть вопросы по работе бота или идеи, как сделать его лучше, "
             "напишите администраторам в Telegram:\n\n"
-            "• [@fedyan999](https://t.me/fedyan999)\n"
-            "• [@oltakmi](https://t.me/oltakmi)\n"
-            "• [@zx4et1x](https://t.me/zx4et1x)"
+            "• https://t.me/fedyan999\n"
+            "• https://t.me/oltakmi\n"
+            "• https://t.me/zx4et1x"
         ),
     }
 
