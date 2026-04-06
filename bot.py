@@ -2,6 +2,7 @@ import logging
 import os
 import sqlite3
 from typing import Dict, Any
+import psycopg
 
 from telegram import (
     Update,
@@ -29,14 +30,33 @@ LANGUAGES = {
     "en": "English",
     "es": "Español",
     "zh": "中文",
+    "fr": "Français",
+    "mn": "Монгол",
 }
 
 
 MAIN_MENU_KEYS = ("schedule", "events", "offices", "channels", "support")
 DB_PATH = os.getenv("BOT_STATS_DB_PATH", "bot_stats.sqlite3")
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
 
 
 def init_stats_db() -> None:
+    if DATABASE_URL:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id BIGINT PRIMARY KEY,
+                        first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+            conn.commit()
+        logger.info("Stats storage: PostgreSQL")
+        return
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -48,11 +68,27 @@ def init_stats_db() -> None:
             """
         )
         conn.commit()
+    logger.info("Stats storage: SQLite (%s)", DB_PATH)
 
 
 def track_user(update: Update) -> None:
     user = update.effective_user
     if not user:
+        return
+
+    if DATABASE_URL:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users(user_id, first_seen, last_seen)
+                    VALUES (%s, NOW(), NOW())
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET last_seen = EXCLUDED.last_seen
+                    """,
+                    (user.id,),
+                )
+            conn.commit()
         return
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -85,6 +121,21 @@ def get_admin_ids() -> set[int]:
 
 
 def get_stats() -> dict[str, int]:
+    if DATABASE_URL:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM users")
+                total = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT COUNT(*) FROM users WHERE last_seen >= NOW() - INTERVAL '1 day'"
+                )
+                active_24h = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT COUNT(*) FROM users WHERE last_seen >= NOW() - INTERVAL '7 day'"
+                )
+                active_7d = cur.fetchone()[0]
+        return {"total": total, "active_24h": active_24h, "active_7d": active_7d}
+
     with sqlite3.connect(DB_PATH) as conn:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         active_24h = conn.execute(
@@ -331,6 +382,162 @@ def get_texts(lang: str) -> Dict[str, str]:
             ),
         }
 
+    if lang == "fr":
+        return {
+            "start_title": "Bienvenue dans l'assistant RUT (MIIT) 👋",
+            "start_body": (
+                "Ici, vous pouvez trouver rapidement les informations importantes sur les études "
+                "et la vie étudiante à l'Université russe des transports."
+            ),
+            "choose_language": "Veuillez choisir une langue :",
+            "main_title": "Menu principal",
+            "main_body": "Sélectionnez la section qui vous intéresse.",
+            "schedule": "Emploi du temps",
+            "events": "Événements et activités",
+            "offices": "Bureaux importants",
+            "channels": "Canaux utiles",
+            "support": "Support technique",
+            "back": "⬅️ Retour",
+            "back_to_main": "Retour au menu principal",
+            "back_to_languages": "Changer de langue",
+            "schedule_text": (
+                "📚 *Emploi du temps*\n\n"
+                "À l'Université russe des transports, un système modulaire est utilisé.\n"
+                "L'emploi du temps peut différer entre les semaines impaires et paires.\n\n"
+                "• L'année académique commence par la *semaine impaire (première)* le *1er septembre*.\n"
+                "• La *semaine paire (deuxième)* commence le *7 septembre*.\n\n"
+                "Vous pouvez toujours consulter l'emploi du temps actualisé :\n"
+                "• sur les panneaux d'information près de votre décanat ;\n"
+                "• sur le site officiel, section emploi du temps : https://rut-miit.ru/timetable\n\n"
+                "*Horaires des cours :*\n"
+                "1er cours — 08:30–09:50\n"
+                "2e cours — 10:05–11:25\n"
+                "3e cours — 11:40–13:00\n"
+                "4e cours — 13:45–15:05\n"
+                "5e cours — 15:20–16:40\n"
+                "6e cours — 16:55–18:15\n"
+                "7e cours — 18:30–19:50\n"
+                "8e cours — 20:00–21:20"
+            ),
+            "events_text": (
+                "🎉 *Événements à RUT (MIIT)*\n\n"
+                "L'université organise régulièrement des événements éducatifs, culturels et sportifs : "
+                "conférences, ateliers, festivals étudiants et plus encore.\n\n"
+                "Les annonces les plus récentes, liens d'inscription et photos sont publiés "
+                "sur le canal Telegram officiel :\n"
+                "• RUT (MIIT) — https://t.me/rut\\_live\n\n"
+                "Abonnez-vous pour suivre la vie du campus !"
+            ),
+            "offices_text": (
+                "🏛 *Bureaux et services importants*\n\n"
+                "• Direction de la coopération internationale — salle 1414\n"
+                "• Bureau des visas — salle 1302\n"
+                "• Service académique pour les étudiants étrangers — salle 1301\n"
+                "• Centre multifonctionnel RUT (MIIT) — salle 1224\n"
+                "• Bibliothèque scientifique et technique :\n"
+                "  – Bibliothèque principale et salle de lecture — salle 1230\n"
+                "• Bureau d'enregistrement militaire — salle 10103\n"
+                "• Salle des cérémonies — salle 1201\n"
+                "• Musée RUT (MIIT) — salle 1149"
+            ),
+            "channels_text": (
+                "🔗 *Canaux et communautés utiles*\n\n"
+                "• RUT (MIIT) — actualités et annonces officielles :\n"
+                "  https://t.me/rut\\_live\n\n"
+                "• Global RUT — soutien et communication pour étudiants internationaux :\n"
+                "  https://t.me/global\\_rut\n\n"
+                "• Canal de la première faculté — vie étudiante et activités :\n"
+                "  https://t.me/perviy\\_fakultetskiy\n\n"
+                "• Communauté du Conseil étudiant RUT (MIIT) sur VK :\n"
+                "  https://vk.com/studsovetrut"
+            ),
+            "support_text": (
+                "💬 *Support technique*\n\n"
+                "Si vous avez des questions sur l'utilisation du bot ou des idées d'amélioration, "
+                "contactez les administrateurs sur Telegram :\n\n"
+                "• https://t.me/fedyan999\n"
+                "• https://t.me/oltakmi\n"
+                "• https://t.me/zx4et1x"
+            ),
+        }
+
+    if lang == "mn":
+        return {
+            "start_title": "RUT (MIIT) туслах ботод тавтай морил 👋",
+            "start_body": (
+                "Эндээс та Оросын Тээврийн Их Сургуулийн хичээл болон оюутны амьдралын "
+                "чухал мэдээллийг хурдан олох боломжтой."
+            ),
+            "choose_language": "Хэлээ сонгоно уу:",
+            "main_title": "Үндсэн цэс",
+            "main_body": "Сонирхож буй хэсгээ сонгоно уу.",
+            "schedule": "Хичээлийн хуваарь",
+            "events": "Арга хэмжээ",
+            "offices": "Чухал өрөөнүүд",
+            "channels": "Хэрэгтэй сувгууд",
+            "support": "Техникийн дэмжлэг",
+            "back": "⬅️ Буцах",
+            "back_to_main": "Үндсэн цэс рүү буцах",
+            "back_to_languages": "Хэл солих",
+            "schedule_text": (
+                "📚 *Хичээлийн хуваарь*\n\n"
+                "Оросын Тээврийн Их Сургуульд модуль хуваарийн систем ашигладаг.\n"
+                "Сондгой болон тэгш долоо хоногт хичээлийн хуваарь өөр байж болно.\n\n"
+                "• *9-р сарын 1*-нд *сондгой (1-р) долоо хоног* эхэлнэ.\n"
+                "• *9-р сарын 7*-нд *тэгш (2-р) долоо хоног* эхэлнэ.\n\n"
+                "Шинэчилсэн хуваарийг дараах газраас харна уу:\n"
+                "• деканы албаны ойролцоох мэдээллийн самбар;\n"
+                "• сургуулийн албан ёсны сайт: https://rut-miit.ru/timetable\n\n"
+                "*Хичээлийн цагууд:*\n"
+                "1-р хичээл — 08:30–09:50\n"
+                "2-р хичээл — 10:05–11:25\n"
+                "3-р хичээл — 11:40–13:00\n"
+                "4-р хичээл — 13:45–15:05\n"
+                "5-р хичээл — 15:20–16:40\n"
+                "6-р хичээл — 16:55–18:15\n"
+                "7-р хичээл — 18:30–19:50\n"
+                "8-р хичээл — 20:00–21:20"
+            ),
+            "events_text": (
+                "🎉 *RUT (MIIT)-ийн арга хэмжээнүүд*\n\n"
+                "Сургуульд лекц, мастер класс, наадам, спортын тэмцээн зэрэг "
+                "боловсролын болон соёлын олон арга хэмжээ тогтмол зохион байгуулагддаг.\n\n"
+                "Хамгийн сүүлийн зар, бүртгэлийн холбоос, тайлангууд албан ёсны Telegram сувагт нийтлэгддэг:\n"
+                "• RUT (MIIT) — https://t.me/rut\\_live\n\n"
+                "Сургуулийн амьдралаас хоцрохгүй байхын тулд бүртгүүлээрэй!"
+            ),
+            "offices_text": (
+                "🏛 *Чухал өрөөнүүд ба үйлчилгээ*\n\n"
+                "• Олон улсын хамтын ажиллагааны газар — 1414 өрөө\n"
+                "• Визийн алба — 1302 өрөө\n"
+                "• Гадаад оюутны сургалтын алба — 1301 өрөө\n"
+                "• RUT (MIIT) олон үйлдэлт төв — 1224 өрөө\n"
+                "• Шинжлэх ухаан, техникийн номын сан:\n"
+                "  – Үндсэн номын сан ба уншлагын танхим — 1230 өрөө\n"
+                "• Цэргийн бүртгэлийн товчоо — 10103 өрөө\n"
+                "• Ёслолын танхим — 1201 өрөө\n"
+                "• RUT (MIIT) музей — 1149 өрөө"
+            ),
+            "channels_text": (
+                "🔗 *Хэрэгтэй сувгууд ба нийгэмлэгүүд*\n\n"
+                "• RUT (MIIT) — албан ёсны мэдээ, зарууд:\n"
+                "  https://t.me/rut\\_live\n\n"
+                "• Global RUT — гадаад оюутнуудад зориулсан дэмжлэг ба харилцаа:\n"
+                "  https://t.me/global\\_rut\n\n"
+                "• Нэгдүгээр факультетийн суваг — оюутны амьдрал ба арга хэмжээ:\n"
+                "  https://t.me/perviy\\_fakultetskiy\n\n"
+                "• RUT (MIIT) Оюутны зөвлөлийн VK нийгэмлэг:\n"
+                "  https://vk.com/studsovetrut"
+            ),
+            "support_text": (
+                "💬 *Техникийн дэмжлэг*\n\n"
+                "Бот ашиглахтай холбоотой асуулт эсвэл санал байвал Telegram-аар админтай холбогдоно уу:\n\n"
+                "• https://t.me/fedyan999\n"
+                "• https://t.me/oltakmi\n"
+                "• https://t.me/zx4et1x"
+            ),
+        }
+
     # Russian is default
     return {
         "start_title": "Добро пожаловать в помощник РУТ (МИИТ) 👋",
@@ -420,6 +627,10 @@ def make_language_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(name, callback_data=f"lang:{code}")
             for code, name in (("es", LANGUAGES["es"]), ("zh", LANGUAGES["zh"]))
+        ],
+        [
+            InlineKeyboardButton(name, callback_data=f"lang:{code}")
+            for code, name in (("fr", LANGUAGES["fr"]), ("mn", LANGUAGES["mn"]))
         ],
     ]
     return InlineKeyboardMarkup(buttons)
