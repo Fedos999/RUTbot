@@ -710,7 +710,16 @@ async def handle_language_choice(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["lang"] = lang
     t = get_texts(lang)
 
-    text = f"*{t['main_title']}*\n\n{t['main_body']}"
+    welcome_text = (
+        "Трудности с расписанием или поиском нужной информации? "
+        "Скучная студенческая жизнь?🤔\n\n"
+        "Привет! 👋\n"
+        "Добро пожаловать в чат-бот для иностранных студентов 🎓\n\n"
+        "Здесь ты найдёшь расписание занятий, мероприятия, важные ссылки и всё, что нужно для удобной учёбы.\n\n"
+        "Удачи и классного старта 🚀"
+    )
+
+    text = f"{welcome_text}\n\n*{t['main_title']}*\n\n{t['main_body']}"
     await query.edit_message_text(
         text,
         reply_markup=make_main_menu_keyboard(lang),
